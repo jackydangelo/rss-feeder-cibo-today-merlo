@@ -1,8 +1,8 @@
-name: Update RSS Feed
+name: Generate RSS Feed
 
 on:
   schedule:
-    - cron: "1 1 * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -23,12 +23,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests beautifulsoup4 lxml
+          pip install requests beautifulsoup4 lxml playwright
+          playwright install chromium
 
       - name: Generate feed
         run: python generate_feed.py
 
-      - name: Commit updated feed
+      - name: Commit feed
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
