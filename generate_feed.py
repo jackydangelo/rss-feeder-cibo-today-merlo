@@ -111,7 +111,7 @@ pretty_xml = minidom.parseString(xml_bytes).toprettyxml(
     encoding="utf-8"
 )
 
-with open("feed.xml", "wb") as f:
+with open("docs/feed.xml", "wb") as f:
     f.write(pretty_xml)
 
 print("feed.xml generato correttamente")
