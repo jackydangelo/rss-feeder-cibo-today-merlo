@@ -74,7 +74,7 @@ xml = minidom.parseString(
     tostring(rss, encoding="utf-8")
 ).toprettyxml(indent="  ")
 
-with open("docs/feed.xml", "wb") as f:
+with open("docs/feed.xml", "w") as f:
     f.write(xml)
 
 print("RSS Created")
