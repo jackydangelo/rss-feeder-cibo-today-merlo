@@ -3,12 +3,14 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
 from xml.etree.ElementTree import Element, SubElement, tostring, register_namespace
 from xml.dom import minidom
+import json
 import os
 
 AUTHOR_URL = "https://www.cibotoday.it/author/profile/davide-merlo/49729159100110/"
 FEED_URL = "https://jackydangelo.github.io/rss-feeder-cibo-today-merlo/feed.xml"
 
 MAX_ARTICLES = 20
+base_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
 def get_html():
     with sync_playwright() as p:
@@ -18,7 +20,6 @@ def get_html():
         html = page.content()
         browser.close()
         return html
-
 
 html = get_html()
 soup = BeautifulSoup(html, "lxml")
@@ -43,21 +44,42 @@ atom_link.set("type", "application/rss+xml")
 
 articles = soup.select("article")
 
-base_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
-
-os.makedirs("docs", exist_ok=True)
-
 for i, article in enumerate(articles[:MAX_ARTICLES]):
 
     a = article.select_one("a")
     if not a:
         continue
 
-    title = a.get_text(strip=True)
     link = a.get("href")
+    if not link:
+        continue
 
     if link.startswith("/"):
         link = "https://www.cibotoday.it" + link
+
+    title = None
+    pub_date = None
+
+    ld = article.select_one('script[type="application/ld+json"]')
+
+    if ld and ld.string:
+        try:
+            data = json.loads(ld.string)
+            if isinstance(data, dict):
+                title = data.get("headline")
+                pub_date = data.get("datePublished")
+        except Exception:
+            pass
+
+    if not title:
+        h = article.select_one("h1, h2, h3")
+        title = h.get_text(strip=True) if h else None
+
+    if not title:
+        title = a.get("title") or a.get_text(strip=True)
+
+    if not title:
+        continue
 
     item = SubElement(channel, "item")
 
@@ -65,16 +87,29 @@ for i, article in enumerate(articles[:MAX_ARTICLES]):
     SubElement(item, "link").text = link
     SubElement(item, "guid").text = link
 
-    fake_date = base_date - timedelta(minutes=i)
-    SubElement(item, "pubDate").text = fake_date.strftime(
-        "%a, %d %b %Y %H:%M:%S GMT"
-    )
+    if pub_date:
+        try:
+            dt = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
+            pub_date = dt.astimezone(timezone.utc).strftime(
+                "%a, %d %b %Y %H:%M:%S GMT"
+            )
+        except Exception:
+            pub_date = None
+
+    if not pub_date:
+        pub_date = (base_date - timedelta(minutes=i)).strftime(
+            "%a, %d %b %Y %H:%M:%S GMT"
+        )
+
+    SubElement(item, "pubDate").text = pub_date
 
 xml = minidom.parseString(
     tostring(rss, encoding="utf-8")
 ).toprettyxml(indent="  ")
 
-with open("docs/feed.xml", "w") as f:
+os.makedirs("docs", exist_ok=True)
+
+with open("docs/feed.xml", "w", encoding="utf-8") as f:
     f.write(xml)
 
 print("RSS Created")
