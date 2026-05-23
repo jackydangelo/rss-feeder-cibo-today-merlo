@@ -6,11 +6,14 @@ from xml.dom import minidom
 import json
 import os
 
-AUTHOR_URL = "https://www.cibotoday.it/author/profile/davide-merlo/49729159100110/"
-FEED_URL = "https://jackydangelo.github.io/rss-feeder-cibo-today-merlo/rss.xml"
+from config import (
+    AUTHOR_URL,
+    FEED_URL,
+    SITE_URL,
+    MAX_ARTICLES,
+    base_date
+)
 
-MAX_ARTICLES = 20
-base_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
 def get_html():
     with sync_playwright() as p:
@@ -58,7 +61,7 @@ for i, article in enumerate(articles[:MAX_ARTICLES]):
         continue
 
     if link.startswith("/"):
-        link = "https://www.cibotoday.it" + link
+        link = SITE_URL + link
 
     title = None
     pub_date = None
