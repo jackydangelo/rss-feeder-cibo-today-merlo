@@ -122,7 +122,7 @@ xml = minidom.parseString(
 
 os.makedirs("docs", exist_ok=True)
 
-with open("docs/feed.xml", "w", encoding="utf-8") as f:
+with open("docs/rss.xml", "w", encoding="utf-8") as f:
     f.write(xml)
 
 print("RSS Created")
