@@ -33,9 +33,10 @@ SubElement(channel, "title").text = "Davide Merlo - CiboToday"
 SubElement(channel, "link").text = AUTHOR_URL
 SubElement(channel, "description").text = "Feed RSS personalizzato"
 SubElement(channel, "language").text = "it-it"
-SubElement(channel, "lastBuildDate").text = datetime.now(timezone.utc).strftime(
-    "%a, %d %b %Y %H:%M:%S GMT"
-)
+
+SubElement(channel, "lastBuildDate").text = datetime.now(
+    timezone.utc
+).strftime("%a, %d %b %Y %H:%M:%S GMT")
 
 atom_link = SubElement(channel, "{http://www.w3.org/2005/Atom}link")
 atom_link.set("href", FEED_URL)
@@ -47,10 +48,12 @@ articles = soup.select("article")
 for i, article in enumerate(articles[:MAX_ARTICLES]):
 
     a = article.select_one("a")
+
     if not a:
         continue
 
     link = a.get("href")
+
     if not link:
         continue
 
@@ -65,9 +68,11 @@ for i, article in enumerate(articles[:MAX_ARTICLES]):
     if ld and ld.string:
         try:
             data = json.loads(ld.string)
+
             if isinstance(data, dict):
                 title = data.get("headline")
                 pub_date = data.get("datePublished")
+
         except Exception:
             pass
 
@@ -85,23 +90,31 @@ for i, article in enumerate(articles[:MAX_ARTICLES]):
 
     SubElement(item, "title").text = title
     SubElement(item, "link").text = link
-    SubElement(item, "guid").text = link
+
+    guid = SubElement(item, "guid")
+    guid.set("isPermaLink", "true")
+    guid.text = link
 
     if pub_date:
         try:
-            dt = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
-            pub_date = dt.astimezone(timezone.utc).strftime(
-                "%a, %d %b %Y %H:%M:%S GMT"
+            dt = datetime.fromisoformat(
+                pub_date.replace("Z", "+00:00")
             )
+
+            pub_date = dt.astimezone(
+                timezone.utc
+            ).strftime("%a, %d %b %Y %H:%M:%S GMT")
+
         except Exception:
             pub_date = None
 
     if not pub_date:
-        pub_date = (base_date - timedelta(minutes=i)).strftime(
-            "%a, %d %b %Y %H:%M:%S GMT"
-        )
+        pub_date = (
+            base_date - timedelta(minutes=i)
+        ).strftime("%a, %d %b %Y %H:%M:%S GMT")
 
     SubElement(item, "pubDate").text = pub_date
+    SubElement(item, "description").text = title
 
 xml = minidom.parseString(
     tostring(rss, encoding="utf-8")
