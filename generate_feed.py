@@ -10,7 +10,10 @@ from config import (
     AUTHOR_URL,
     FEED_URL,
     SITE_URL,
+    TITLE_RSS,
+    DESCRIPTION_RSS,
     MAX_ARTICLES,
+    TIMEOUT,
     base_date
 )
 
@@ -19,7 +22,7 @@ def get_html():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto(AUTHOR_URL, timeout=60000)
+        page.goto(AUTHOR_URL, timeout=TIMEOUT)
         html = page.content()
         browser.close()
         return html
@@ -32,9 +35,9 @@ register_namespace("atom", "http://www.w3.org/2005/Atom")
 rss = Element("rss", version="2.0")
 channel = SubElement(rss, "channel")
 
-SubElement(channel, "title").text = "Davide Merlo - CiboToday"
+SubElement(channel, "title").text = TITLE_RSS
 SubElement(channel, "link").text = AUTHOR_URL
-SubElement(channel, "description").text = "Feed RSS personalizzato"
+SubElement(channel, "description").text = DESCRIPTION_RSS
 SubElement(channel, "language").text = "it-it"
 
 SubElement(channel, "lastBuildDate").text = datetime.now(
