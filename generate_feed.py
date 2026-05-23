@@ -62,6 +62,7 @@ for i, article in enumerate(articles[:MAX_ARTICLES]):
 
     title = None
     pub_date = None
+    description = None
 
     ld = article.select_one('script[type="application/ld+json"]')
 
@@ -72,6 +73,7 @@ for i, article in enumerate(articles[:MAX_ARTICLES]):
             if isinstance(data, dict):
                 title = data.get("headline")
                 pub_date = data.get("datePublished")
+                description = data.get("description")
 
         except Exception:
             pass
@@ -114,7 +116,19 @@ for i, article in enumerate(articles[:MAX_ARTICLES]):
         ).strftime("%a, %d %b %Y %H:%M:%S GMT")
 
     SubElement(item, "pubDate").text = pub_date
-    SubElement(item, "description").text = title
+
+    if not description:
+        p = article.select_one("p, .excerpt, .summary")
+    
+        description = (
+            p.get_text(strip=True)
+            if p
+            else title
+        )
+    
+    description = description.strip()[:500]
+    
+    SubElement(item, "description").text = description
 
 xml = minidom.parseString(
     tostring(rss, encoding="utf-8")
