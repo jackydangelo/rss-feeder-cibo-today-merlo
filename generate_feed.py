@@ -18,24 +18,40 @@ from config import (
 )
 
 
-def get_html(url: str) -> str:
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(url, timeout=TIMEOUT)
-        html = page.content()
-        browser.close()
-        return html
+def create_page():
+    p = sync_playwright().start()
+
+    browser = p.chromium.launch(headless=True)
+
+    context = browser.new_context()
+
+    page = context.new_page()
+
+    return p, browser, context, page
+
+
+def get_html(page, url: str) -> str:
+    page.goto(url, timeout=TIMEOUT)
+
+    page.wait_for_selector(
+        "article",
+        timeout=5000
+    )
+
+    return page.content()
 
 
 def parse_ld_json(article):
     ld = article.select_one('script[type="application/ld+json"]')
+
     if not ld or not ld.string:
         return {}
 
     try:
         data = json.loads(ld.string)
+
         return data if isinstance(data, dict) else {}
+
     except Exception:
         return {}
 
@@ -43,20 +59,27 @@ def parse_ld_json(article):
 def normalize_url(link: str) -> str:
     if link.startswith("/"):
         return SITE_URL + link
+
     return link
 
 
 def format_pubdate(pub_date: str | None, index: int) -> str:
     if pub_date:
         try:
-            dt = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
-            return dt.astimezone(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+            dt = datetime.fromisoformat(
+                pub_date.replace("Z", "+00:00")
+            )
+
+            return dt.astimezone(
+                timezone.utc
+            ).strftime("%a, %d %b %Y %H:%M:%S GMT")
+
         except Exception:
             pass
 
-    return (base_date - timedelta(minutes=index)).strftime(
-        "%a, %d %b %Y %H:%M:%S GMT"
-    )
+    return (
+        base_date - timedelta(minutes=index)
+    ).strftime("%a, %d %b %Y %H:%M:%S GMT")
 
 
 def extract_title(article, a_tag, ld_data):
@@ -64,10 +87,14 @@ def extract_title(article, a_tag, ld_data):
 
     if not title:
         h = article.select_one("h1, h2, h3")
+
         title = h.get_text(strip=True) if h else None
 
     if not title:
-        title = a_tag.get("title") or a_tag.get_text(strip=True)
+        title = (
+            a_tag.get("title")
+            or a_tag.get_text(strip=True)
+        )
 
     return title
 
@@ -76,15 +103,23 @@ def extract_description(article, title, ld_data):
     desc = ld_data.get("description")
 
     if not desc:
-        p = article.select_one("p, .excerpt, .summary")
+        p = article.select_one(
+            "p, .excerpt, .summary"
+        )
+
         desc = p.get_text(strip=True) if p else title
 
     return (desc or "").strip()[:500]
 
+
 def create_rss_root():
-    register_namespace("atom", "http://www.w3.org/2005/Atom")
+    register_namespace(
+        "atom",
+        "http://www.w3.org/2005/Atom"
+    )
 
     rss = Element("rss", version="2.0")
+
     channel = SubElement(rss, "channel")
 
     SubElement(channel, "title").text = TITLE_RSS
@@ -92,11 +127,18 @@ def create_rss_root():
     SubElement(channel, "description").text = DESCRIPTION_RSS
     SubElement(channel, "language").text = "it-it"
 
-    SubElement(channel, "lastBuildDate").text = datetime.now(
+    SubElement(
+        channel,
+        "lastBuildDate"
+    ).text = datetime.now(
         timezone.utc
     ).strftime("%a, %d %b %Y %H:%M:%S GMT")
 
-    atom_link = SubElement(channel, "{http://www.w3.org/2005/Atom}link")
+    atom_link = SubElement(
+        channel,
+        "{http://www.w3.org/2005/Atom}link"
+    )
+
     atom_link.set("href", FEED_URL)
     atom_link.set("rel", "self")
     atom_link.set("type", "application/rss+xml")
@@ -111,6 +153,7 @@ def add_item(channel, title, link, pub_date, description):
     SubElement(item, "link").text = link
 
     guid = SubElement(item, "guid")
+
     guid.set("isPermaLink", "true")
     guid.text = link
 
@@ -119,42 +162,83 @@ def add_item(channel, title, link, pub_date, description):
 
 
 def build_rss():
-    html = get_html(AUTHOR_URL)
-    soup = BeautifulSoup(html, "lxml")
+    p, browser, context, page = create_page()
 
-    rss, channel = create_rss_root()
+    try:
+        html = get_html(page, AUTHOR_URL)
 
-    articles = soup.select("article")
+        soup = BeautifulSoup(html, "lxml")
 
-    for i, article in enumerate(articles[:MAX_ARTICLES]):
-        a = article.select_one("a")
-        if not a or not a.get("href"):
-            continue
+        rss, channel = create_rss_root()
 
-        link = normalize_url(a["href"])
-        ld_data = parse_ld_json(article)
+        articles = soup.select("article")
 
-        title = extract_title(article, a, ld_data)
-        if not title:
-            continue
+        for i, article in enumerate(
+            articles[:MAX_ARTICLES]
+        ):
 
-        pub_date = format_pubdate(ld_data.get("datePublished"), i)
-        description = extract_description(article, title, ld_data)
+            a = article.select_one("a")
 
-        add_item(channel, title, link, pub_date, description)
+            if not a or not a.get("href"):
+                continue
 
-    return rss
+            link = normalize_url(a["href"])
+
+            ld_data = parse_ld_json(article)
+
+            title = extract_title(
+                article,
+                a,
+                ld_data
+            )
+
+            if not title:
+                continue
+
+            pub_date = format_pubdate(
+                ld_data.get("datePublished"),
+                i
+            )
+
+            description = extract_description(
+                article,
+                title,
+                ld_data
+            )
+
+            add_item(
+                channel,
+                title,
+                link,
+                pub_date,
+                description
+            )
+
+        return rss
+
+    finally:
+        context.close()
+        browser.close()
+        p.stop()
 
 
 def save_rss(rss, path="docs/rss.xml"):
-    xml = minidom.parseString(tostring(rss, encoding="utf-8")).toprettyxml(indent="  ")
+    xml = minidom.parseString(
+        tostring(rss, encoding="utf-8")
+    ).toprettyxml(indent="  ")
 
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    os.makedirs(
+        os.path.dirname(path),
+        exist_ok=True
+    )
+
     with open(path, "w", encoding="utf-8") as f:
         f.write(xml)
 
 
 if __name__ == "__main__":
     rss = build_rss()
+
     save_rss(rss)
+
     print("RSS Created")
